@@ -63,7 +63,7 @@ test.describe("task management", () => {
     const title = `Recovery task ${Date.now()}`;
     await page.getByTestId("task-title").fill(title);
     await page.getByTestId("task-create").click();
-    await expect(page.getByRole("alert")).toContainText("temporarily unavailable");
+    await expect(page.getByText("Task service is temporarily unavailable.", { exact: true })).toBeVisible();
     await expect(page.getByTestId("task-title")).toHaveValue(title);
     await page.getByTestId("task-create").click();
     const card = page.getByRole("article").filter({ hasText: title });
