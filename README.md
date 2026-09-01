@@ -2,7 +2,7 @@
 
 This repository owns deterministic Playwright, API, and axe accessibility checks, preview discovery, evidence aggregation, a versioned result schema, optional OpenAI advisory analysis, and idempotent GitHub reporting.
 
-GitHub connectivity is configured through `GITHUB_TOKEN` (or the `GITHUB_API_KEY` alias) and `GITHUB_REPOSITORY=owner/repository`. `npm run qa:list-open-prs` verifies access and persists a machine-readable list containing only open pull requests. The scheduled/manual `Test all open pull requests` workflow uses `TARGET_GITHUB_TOKEN` and `TARGET_GITHUB_REPOSITORY` to test those PRs in parallel.
+GitHub connectivity is configured through `GITHUB_TOKEN` (or the `GITHUB_API_KEY` alias) and `GITHUB_REPOSITORY=owner/repository` locally. In GitHub Actions, use `TARGET_GITHUB_REPOSITORY` because the runner reserves `GITHUB_REPOSITORY` for the QA repository. `npm run qa:list-open-prs` verifies access and persists a machine-readable list containing only open pull requests. The scheduled/manual `Test all open pull requests` workflow uses `TARGET_GITHUB_TOKEN` and `TARGET_GITHUB_REPOSITORY` to test those PRs in parallel.
 
 Publish this folder as `qa-platform`. Consumer repositories send a `test-open-pr` repository-dispatch event. The QA repository owns execution and reporting, so untrusted pull-request code never receives target tokens or report permissions.
 

@@ -48,5 +48,5 @@ jobs:
       - run: npm run qa:report -- qa-results/pr-${{ github.event.client_payload.pr_number }}/summary.json qa-results/pr-${{ github.event.client_payload.pr_number }}/ai-analysis.json
         env:
           GITHUB_TOKEN: ${{ secrets.TARGET_GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.event.client_payload.target_repository }}
+          TARGET_GITHUB_REPOSITORY: ${{ github.event.client_payload.target_repository }}
           PR_NUMBER: ${{ github.event.client_payload.pr_number }}

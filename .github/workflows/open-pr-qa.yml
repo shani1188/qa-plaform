@@ -29,7 +29,7 @@ jobs:
         run: npm run qa:list-open-prs
         env:
           GITHUB_TOKEN: ${{ secrets.TARGET_GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ vars.TARGET_GITHUB_REPOSITORY }}
+          TARGET_GITHUB_REPOSITORY: ${{ vars.TARGET_GITHUB_REPOSITORY }}
           QA_OUTPUT_DIR: qa-results/discovery
       - uses: actions/upload-artifact@v4
         with:
@@ -85,5 +85,5 @@ jobs:
       - run: npm run qa:report -- qa-results/pr-${{ matrix.pr.number }}/summary.json qa-results/pr-${{ matrix.pr.number }}/ai-analysis.json
         env:
           GITHUB_TOKEN: ${{ secrets.TARGET_GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ vars.TARGET_GITHUB_REPOSITORY }}
+          TARGET_GITHUB_REPOSITORY: ${{ vars.TARGET_GITHUB_REPOSITORY }}
           PR_NUMBER: ${{ matrix.pr.number }}

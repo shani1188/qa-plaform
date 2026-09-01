@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { z } from "zod";
 
-const repositorySchema = z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, "GITHUB_REPOSITORY must use owner/repository format.");
+const repositorySchema = z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, "The GitHub repository must use owner/repository format.");
 
 export type OpenPullRequest = {
   number: number;
@@ -14,7 +14,7 @@ export type OpenPullRequest = {
 
 export function githubConfig() {
   const token = process.env.GITHUB_TOKEN || process.env.GITHUB_API_KEY;
-  const repository = repositorySchema.parse(process.env.GITHUB_REPOSITORY);
+  const repository = repositorySchema.parse(process.env.TARGET_GITHUB_REPOSITORY ?? process.env.GITHUB_REPOSITORY);
   if (!token) throw new Error("Set GITHUB_TOKEN (preferred) or GITHUB_API_KEY.");
   return {
     token,

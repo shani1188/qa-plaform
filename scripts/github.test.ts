@@ -11,6 +11,7 @@ afterEach(() => {
   delete process.env.GITHUB_TOKEN;
   delete process.env.GITHUB_API_KEY;
   delete process.env.GITHUB_REPOSITORY;
+  delete process.env.TARGET_GITHUB_REPOSITORY;
 });
 
 describe("GitHub environment configuration", () => {
@@ -23,6 +24,12 @@ describe("GitHub environment configuration", () => {
   it("rejects malformed repository names", () => {
     process.env.GITHUB_REPOSITORY = "repository-only";
     expect(() => githubConfig()).toThrow(/owner\/repository/);
+  });
+
+  it("prefers the non-reserved target repository in GitHub Actions", () => {
+    process.env.GITHUB_REPOSITORY = "owner/qa-platform";
+    process.env.TARGET_GITHUB_REPOSITORY = "owner/demo-app";
+    expect(githubConfig().repository).toBe("owner/demo-app");
   });
 
   it("lists only open pull requests", async () => {

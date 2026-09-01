@@ -65,7 +65,7 @@ jobs:
         working-directory: qa-platform
         env:
           GITHUB_TOKEN: ${{ secrets.TARGET_GITHUB_TOKEN || github.token }}
-          GITHUB_REPOSITORY: ${{ inputs.target_repository || github.repository }}
+          TARGET_GITHUB_REPOSITORY: ${{ inputs.target_repository || github.repository }}
           GITHUB_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
           PREVIEW_TIMEOUT_MS: "600000"
@@ -75,7 +75,7 @@ jobs:
         working-directory: qa-platform
         env:
           GITHUB_TOKEN: ${{ secrets.TARGET_GITHUB_TOKEN || github.token }}
-          GITHUB_REPOSITORY: ${{ inputs.target_repository || github.repository }}
+          TARGET_GITHUB_REPOSITORY: ${{ inputs.target_repository || github.repository }}
           PR_NUMBER: ${{ steps.preview.outputs.pr }}
           QA_OUTPUT_DIR: qa-results/pr-${{ steps.preview.outputs.pr }}/priority-plan
       - uses: actions/upload-artifact@v4
@@ -230,7 +230,7 @@ jobs:
       - run: npm run qa:aggregate -- ../collected qa-results/pr-${{ needs.preview.outputs.pr }}/summary.json
         working-directory: qa-platform
         env:
-          GITHUB_REPOSITORY: ${{ inputs.target_repository || github.repository }}
+          TARGET_GITHUB_REPOSITORY: ${{ inputs.target_repository || github.repository }}
           PR_NUMBER: ${{ needs.preview.outputs.pr }}
           GITHUB_SHA: ${{ needs.preview.outputs.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

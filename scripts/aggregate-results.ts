@@ -62,7 +62,7 @@ if (!reports.length) {
 const trusted = Boolean(process.env.QA_USER_EMAIL && process.env.QA_USER_PASSWORD);
 const result: QaResult = {
   schemaVersion: "1.0",
-  run: { repository: process.env.GITHUB_REPOSITORY ?? "local/demo", sha: process.env.GITHUB_SHA ?? "local", prNumber: Number(process.env.PR_NUMBER ?? 1), runUrl: process.env.RUN_URL ?? "", createdAt: new Date().toISOString() },
+  run: { repository: process.env.TARGET_GITHUB_REPOSITORY ?? process.env.GITHUB_REPOSITORY ?? "local/demo", sha: process.env.GITHUB_SHA ?? "local", prNumber: Number(process.env.PR_NUMBER ?? 1), runUrl: process.env.RUN_URL ?? "", createdAt: new Date().toISOString() },
   status: failed ? "failed" : skipped && !trusted ? "partial" : "passed",
   counts: { passed, failed, skipped }, coverage: ["functional", "api", "accessibility"], failures,
   notes: trusted ? [] : ["Authenticated checks were skipped because privileged QA credentials are intentionally unavailable to forked pull requests."]
