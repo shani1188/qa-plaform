@@ -7,7 +7,7 @@ test.describe("task management", () => {
     await signIn(page);
   });
 
-  test("creates, filters, completes, and deletes a task", { tag: ["@tasks", "@positive"] }, async ({ page }) => {
+  test("creates, comments, moves, filters, changes views, and deletes a task", { tag: ["@tasks", "@positive"] }, async ({ page }) => {
     const title = `Automated task ${Date.now()}`;
     await page.getByTestId("task-title").fill(title);
     await page.getByTestId("task-description").fill("Created by the deterministic browser suite");
@@ -17,13 +17,20 @@ test.describe("task management", () => {
     await expect(card).toBeVisible();
     await expect(card).toContainText("Created by the deterministic browser suite");
     await expect(card).toContainText("high priority");
+    await card.getByText(/^Comments \(/).click();
+    await card.getByTestId(/comment-input-/).fill("Ready for product review");
+    await card.getByTestId(/comment-submit-/).click();
+    await expect(card).toContainText("Ready for product review");
+    await card.dragTo(page.getByTestId("status-column-pending"));
+    await expect(card.getByRole("combobox", { name: `Status for ${title}` })).toHaveValue("pending");
+    await page.getByTestId("view-list").click();
+    await expect(page.getByTestId("task-list")).toBeVisible();
+    await card.getByRole("combobox", { name: `Status for ${title}` }).selectOption("completed");
     await page.reload();
-    await expect(card).toBeVisible();
-    await card.getByRole("combobox", { name: `Status for ${title}` }).selectOption("done");
-    await page.reload();
-    await expect(card).toContainText("done");
-    await page.getByTestId("task-filter").selectOption("done");
-    await expect(card).toContainText("done");
+    await page.getByTestId("view-list").click();
+    await expect(card).toContainText("Completed");
+    await page.getByTestId("task-filter").selectOption("completed");
+    await expect(card).toContainText("Completed");
     page.once("dialog", (dialog) => dialog.accept());
     await card.getByRole("button", { name: `Delete ${title}` }).click();
     await expect(card).toHaveCount(0);
@@ -35,6 +42,7 @@ test.describe("task management", () => {
     await page.getByTestId("task-create").click();
     await expect(title).toHaveJSProperty("validity.valueMissing", true);
     await expect(title).toHaveAttribute("maxlength", "120");
+    await expect(page.getByTestId("task-status").locator("option")).toHaveCount(5);
   });
 
   test("keeps a task when deletion is cancelled", { tag: ["@tasks", "@edge"] }, async ({ page }) => {
@@ -84,8 +92,10 @@ test.describe("task management", () => {
     const secondPage = await secondContext.newPage();
     await signIn(secondPage, secondEmail);
     await expect(secondPage.getByRole("article").filter({ hasText: title })).toHaveCount(0);
-    const update = await secondPage.request.patch(`/api/tasks/${task.id}`, { data: { status: "done" } });
+    const update = await secondPage.request.patch(`/api/tasks/${task.id}`, { data: { status: "completed" } });
     expect(update.status()).toBe(404);
+    const comment = await secondPage.request.post(`/api/tasks/${task.id}/comments`, { data: { body: "Should not be allowed" } });
+    expect(comment.status()).toBe(404);
     const removal = await secondPage.request.delete(`/api/tasks/${task.id}`);
     expect(removal.status()).toBe(404);
     await secondContext.close();
