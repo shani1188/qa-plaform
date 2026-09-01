@@ -40,7 +40,7 @@ export async function githubRequest<T>(path: string, init: RequestInit = {}): Pr
   if (method === "GET" && response.status === 404) response = await request(false);
   if (!response.ok) {
     const requestId = response.headers.get("x-github-request-id");
-    throw new Error(`GitHub API request failed (${response.status})${requestId ? `, request ${requestId}` : ""}.`);
+    throw new Error(`GitHub API request failed for ${path} (${response.status})${requestId ? `, request ${requestId}` : ""}.`);
   }
   return (response.status === 204 ? undefined : await response.json()) as T;
 }
