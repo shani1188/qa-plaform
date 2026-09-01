@@ -166,6 +166,9 @@ jobs:
     if: ${{ always() && needs.preview.result == 'success' && needs.seed.result == 'success' && (needs.priority.result == 'success' || needs.priority.result == 'skipped') }}
     strategy:
       fail-fast: false
+      # The trusted suites currently share a seeded Supabase account. Run one
+      # suite at a time so concurrent sign-ins cannot invalidate its session.
+      max-parallel: 1
       matrix:
         include:
           - project: api
