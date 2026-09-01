@@ -8,6 +8,8 @@ on:
 permissions:
   contents: read
   actions: read
+  deployments: read
+  pull-requests: read
 
 jobs:
   discover:
@@ -85,4 +87,3 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.TARGET_GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ vars.TARGET_GITHUB_REPOSITORY }}
           PR_NUMBER: ${{ matrix.pr.number }}
-
