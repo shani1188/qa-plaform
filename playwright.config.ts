@@ -10,7 +10,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
-  workers: 2,
+  // Trusted CI tests share two run-scoped Supabase users. Serial execution
+  // prevents concurrent sign-ins from invalidating another test's session.
+  workers: process.env.CI ? 1 : 2,
   timeout: 30_000,
   expect: { timeout: 7_000 },
   outputDir: path.join(outputRoot, "test-results"),
