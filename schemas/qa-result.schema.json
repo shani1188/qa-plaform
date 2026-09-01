@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/schemas/qa-result-1.0.json",
+  "title": "QA result 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "run", "status", "counts", "coverage", "failures", "notes"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "run": { "type": "object", "required": ["repository", "sha", "prNumber", "runUrl", "createdAt"] },
+    "status": { "enum": ["passed", "failed", "partial"] },
+    "counts": { "type": "object", "required": ["passed", "failed", "skipped"] },
+    "coverage": { "type": "array", "items": { "enum": ["functional", "api", "accessibility"] }, "uniqueItems": true },
+    "failures": { "type": "array", "maxItems": 100 },
+    "notes": { "type": "array", "maxItems": 20 }
+  }
+}

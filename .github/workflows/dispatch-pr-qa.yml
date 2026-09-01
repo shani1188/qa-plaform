@@ -1,0 +1,51 @@
+name: Test dispatched open pull request
+
+on:
+  repository_dispatch:
+    types: [test-open-pr]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  qa:
+    name: PR ${{ github.event.client_payload.pr_number }}
+    uses: ./.github/workflows/reusable-pr-qa.yml
+    with:
+      qa_repository: ${{ github.repository }}
+      target_repository: ${{ github.event.client_payload.target_repository }}
+      pr_number: ${{ github.event.client_payload.pr_number }}
+    secrets:
+      TARGET_GITHUB_TOKEN: ${{ secrets.TARGET_GITHUB_TOKEN }}
+      QA_USER_PASSWORD: ${{ secrets.QA_USER_PASSWORD }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+  report:
+    name: Publish QA report
+    needs: qa
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: qa-report-pr-${{ github.event.client_payload.pr_number }}
+          path: qa-results/pr-${{ github.event.client_payload.pr_number }}
+      - run: npm run qa:ai -- qa-results/pr-${{ github.event.client_payload.pr_number }}/summary.json qa-results/pr-${{ github.event.client_payload.pr_number }}/ai-analysis.json
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+      - run: npm run qa:report -- qa-results/pr-${{ github.event.client_payload.pr_number }}/summary.json qa-results/pr-${{ github.event.client_payload.pr_number }}/ai-analysis.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.TARGET_GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.event.client_payload.target_repository }}
+          PR_NUMBER: ${{ github.event.client_payload.pr_number }}
+

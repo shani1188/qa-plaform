@@ -1,0 +1,88 @@
+name: Test all open pull requests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  discover:
+    name: Discover open pull requests
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.open.outputs.matrix }}
+      count: ${{ steps.open.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - id: open
+        run: npm run qa:list-open-prs
+        env:
+          GITHUB_TOKEN: ${{ secrets.TARGET_GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ vars.TARGET_GITHUB_REPOSITORY }}
+          QA_OUTPUT_DIR: qa-results/discovery
+      - uses: actions/upload-artifact@v4
+        with:
+          name: open-pull-request-catalog
+          path: qa-results/discovery/open-pull-requests.json
+          retention-days: 30
+
+  qa:
+    name: PR ${{ matrix.pr.number }}
+    needs: discover
+    if: needs.discover.outputs.count != '0'
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        pr: ${{ fromJson(needs.discover.outputs.matrix) }}
+    uses: ./.github/workflows/reusable-pr-qa.yml
+    with:
+      qa_repository: ${{ github.repository }}
+      target_repository: ${{ vars.TARGET_GITHUB_REPOSITORY }}
+      pr_number: ${{ matrix.pr.number }}
+    secrets:
+      TARGET_GITHUB_TOKEN: ${{ secrets.TARGET_GITHUB_TOKEN }}
+      QA_USER_PASSWORD: ${{ secrets.QA_USER_PASSWORD }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+  report:
+    name: Report PR ${{ matrix.pr.number }}
+    needs: [discover, qa]
+    if: ${{ always() && needs.discover.outputs.count != '0' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        pr: ${{ fromJson(needs.discover.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: qa-report-pr-${{ matrix.pr.number }}
+          path: qa-results/pr-${{ matrix.pr.number }}
+      - run: npm run qa:ai -- qa-results/pr-${{ matrix.pr.number }}/summary.json qa-results/pr-${{ matrix.pr.number }}/ai-analysis.json
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+      - run: npm run qa:report -- qa-results/pr-${{ matrix.pr.number }}/summary.json qa-results/pr-${{ matrix.pr.number }}/ai-analysis.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.TARGET_GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ vars.TARGET_GITHUB_REPOSITORY }}
+          PR_NUMBER: ${{ matrix.pr.number }}
+

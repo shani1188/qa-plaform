@@ -1,0 +1,285 @@
+name: Reusable PR QA
+
+on:
+  workflow_call:
+    inputs:
+      qa_repository:
+        description: Repository containing this QA platform
+        required: true
+        type: string
+      target_repository:
+        description: Repository whose open pull request is being tested; defaults to the caller repository
+        required: false
+        default: ""
+        type: string
+      node_version:
+        required: false
+        default: "22"
+        type: string
+      pr_number:
+        description: Pull request number for a manual dispatch; zero uses the pull_request event
+        required: false
+        default: 0
+        type: number
+    secrets:
+      QA_USER_PASSWORD:
+        required: false
+      SUPABASE_SERVICE_ROLE_KEY:
+        required: false
+      NEXT_PUBLIC_SUPABASE_URL:
+        required: false
+      NEXT_PUBLIC_SUPABASE_ANON_KEY:
+        required: false
+      TARGET_GITHUB_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+  deployments: read
+  pull-requests: read
+
+jobs:
+  preview:
+    name: Resolve preview
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.preview.outputs.url }}
+      sha: ${{ steps.preview.outputs.sha }}
+      pr: ${{ steps.preview.outputs.pr }}
+      is_bug: ${{ steps.priority.outputs.is_bug }}
+      focus: ${{ steps.priority.outputs.focus }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.qa_repository }}
+          path: qa-platform
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: npm
+          cache-dependency-path: qa-platform/package-lock.json
+      - run: npm ci
+        working-directory: qa-platform
+      - id: preview
+        run: npm run qa:resolve-preview
+        working-directory: qa-platform
+        env:
+          GITHUB_TOKEN: ${{ secrets.TARGET_GITHUB_TOKEN || github.token }}
+          GITHUB_REPOSITORY: ${{ inputs.target_repository || github.repository }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+          PREVIEW_TIMEOUT_MS: "600000"
+      - id: priority
+        name: Detect bug details and select the first test group
+        run: npm run qa:prioritize
+        working-directory: qa-platform
+        env:
+          GITHUB_TOKEN: ${{ secrets.TARGET_GITHUB_TOKEN || github.token }}
+          GITHUB_REPOSITORY: ${{ inputs.target_repository || github.repository }}
+          PR_NUMBER: ${{ steps.preview.outputs.pr }}
+          QA_OUTPUT_DIR: qa-results/pr-${{ steps.preview.outputs.pr }}/priority-plan
+      - uses: actions/upload-artifact@v4
+        with:
+          name: priority-plan-pr-${{ steps.preview.outputs.pr }}
+          path: qa-platform/qa-results/pr-${{ steps.preview.outputs.pr }}/priority-plan
+          retention-days: 30
+
+  seed:
+    name: Prepare isolated QA data
+    needs: preview
+    runs-on: ubuntu-latest
+    env:
+      HAS_AUTH: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY != '' && secrets.QA_USER_PASSWORD != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.target_repository || github.repository }}
+          token: ${{ secrets.TARGET_GITHUB_TOKEN || github.token }}
+          path: product
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: npm
+          cache-dependency-path: product/package-lock.json
+      - run: npm ci
+        working-directory: product
+      - if: env.HAS_AUTH == 'true'
+        run: npm run qa:seed
+        working-directory: product
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          QA_USER_PASSWORD: ${{ secrets.QA_USER_PASSWORD }}
+          QA_RUN_ID: pr-${{ needs.preview.outputs.pr }}-${{ github.run_id }}
+
+  priority:
+    name: Bug-focused cases first (${{ needs.preview.outputs.focus }})
+    needs: [preview, seed]
+    if: ${{ needs.preview.outputs.is_bug == 'true' && needs.seed.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.qa_repository }}
+          path: qa-platform
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: npm
+          cache-dependency-path: qa-platform/package-lock.json
+      - run: npm ci
+        working-directory: qa-platform
+      - run: npx playwright install --with-deps chromium
+        working-directory: qa-platform
+      - name: Run affected positive, negative, and edge cases
+        shell: bash
+        working-directory: qa-platform
+        env:
+          BUG_FOCUS: ${{ needs.preview.outputs.focus }}
+          BASE_URL: ${{ needs.preview.outputs.url }}
+          QA_USER_EMAIL: qa+pr-${{ needs.preview.outputs.pr }}-${{ github.run_id }}-1@example.test
+          QA_SECOND_USER_EMAIL: qa+pr-${{ needs.preview.outputs.pr }}-${{ github.run_id }}-2@example.test
+          QA_USER_PASSWORD: ${{ secrets.QA_USER_PASSWORD }}
+          QA_OUTPUT_DIR: qa-results/pr-${{ needs.preview.outputs.pr }}/priority
+        run: |
+          case "$BUG_FOCUS" in
+            auth) npx playwright test --project=api --project=functional --grep "@auth" ;;
+            tasks) npx playwright test --project=api --project=functional --grep "@tasks" ;;
+            api) npx playwright test --project=api ;;
+            accessibility) npx playwright test --project=accessibility ;;
+            all) npx playwright test --project=api --project=functional ;;
+            *) echo "Invalid bug focus" >&2; exit 2 ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: priority-evidence-pr-${{ needs.preview.outputs.pr }}
+          path: qa-platform/qa-results/pr-${{ needs.preview.outputs.pr }}/priority
+          retention-days: 14
+
+  suites:
+    name: ${{ matrix.label }}
+    needs: [preview, seed, priority]
+    if: ${{ always() && needs.preview.result == 'success' && needs.seed.result == 'success' && (needs.priority.result == 'success' || needs.priority.result == 'skipped') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: api
+            label: API contracts
+          - project: functional
+            label: Functional journeys
+          - project: accessibility
+            label: Accessibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.qa_repository }}
+          path: qa-platform
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: npm
+          cache-dependency-path: qa-platform/package-lock.json
+      - run: npm ci
+        working-directory: qa-platform
+      - run: npx playwright install --with-deps chromium
+        working-directory: qa-platform
+      - id: tests
+        continue-on-error: true
+        run: npx playwright test --project=${{ matrix.project }}
+        working-directory: qa-platform
+        env:
+          BASE_URL: ${{ needs.preview.outputs.url }}
+          QA_USER_EMAIL: qa+pr-${{ needs.preview.outputs.pr }}-${{ github.run_id }}-1@example.test
+          QA_SECOND_USER_EMAIL: qa+pr-${{ needs.preview.outputs.pr }}-${{ github.run_id }}-2@example.test
+          QA_USER_PASSWORD: ${{ secrets.QA_USER_PASSWORD }}
+          QA_OUTPUT_DIR: qa-results/pr-${{ needs.preview.outputs.pr }}/${{ matrix.project }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: raw-${{ matrix.project }}-pr-${{ needs.preview.outputs.pr }}
+          path: qa-platform/qa-results/pr-${{ needs.preview.outputs.pr }}/${{ matrix.project }}
+          retention-days: 14
+      - if: steps.tests.outcome == 'failure'
+        run: exit 1
+
+  aggregate:
+    name: Aggregate QA evidence
+    needs: [preview, suites]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.qa_repository }}
+          path: qa-platform
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+      - run: npm ci
+        working-directory: qa-platform
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: raw-*-pr-${{ needs.preview.outputs.pr }}
+          path: collected
+      - run: npm run qa:aggregate -- ../collected qa-results/pr-${{ needs.preview.outputs.pr }}/summary.json
+        working-directory: qa-platform
+        env:
+          GITHUB_REPOSITORY: ${{ inputs.target_repository || github.repository }}
+          PR_NUMBER: ${{ needs.preview.outputs.pr }}
+          GITHUB_SHA: ${{ needs.preview.outputs.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          QA_USER_EMAIL: ${{ secrets.QA_USER_PASSWORD != '' && format('qa+pr-{0}-{1}-1@example.test', needs.preview.outputs.pr, github.run_id) || '' }}
+          QA_USER_PASSWORD: ${{ secrets.QA_USER_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qa-report-pr-${{ needs.preview.outputs.pr }}
+          path: qa-platform/qa-results/pr-${{ needs.preview.outputs.pr }}/summary.json
+          retention-days: 30
+
+  gate:
+    name: Required QA gate
+    needs: [priority, suites, aggregate]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce deterministic result
+        run: |
+          test "${{ needs.priority.result }}" = "success" -o "${{ needs.priority.result }}" = "skipped"
+          test "${{ needs.suites.result }}" = "success"
+          test "${{ needs.aggregate.result }}" = "success"
+
+  cleanup:
+    name: Clean isolated QA data
+    needs: [preview, seed, suites, aggregate]
+    if: ${{ always() && needs.seed.result == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      HAS_AUTH: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY != '' && secrets.QA_USER_PASSWORD != '' }}
+    steps:
+      - if: env.HAS_AUTH == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.target_repository || github.repository }}
+          token: ${{ secrets.TARGET_GITHUB_TOKEN || github.token }}
+          path: product
+      - if: env.HAS_AUTH == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: npm
+          cache-dependency-path: product/package-lock.json
+      - if: env.HAS_AUTH == 'true'
+        run: npm ci
+        working-directory: product
+      - if: env.HAS_AUTH == 'true'
+        run: npm run qa:cleanup
+        working-directory: product
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          QA_RUN_ID: pr-${{ needs.preview.outputs.pr }}-${{ github.run_id }}

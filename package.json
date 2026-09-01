@@ -1,0 +1,37 @@
+{
+  "name": "pr-qa-platform",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run scripts/result-schema.test.ts scripts/github.test.ts scripts/prioritization.test.ts --pool=threads",
+    "test:e2e": "playwright test",
+    "test:api": "playwright test --project=api",
+    "test:functional": "playwright test --project=functional",
+    "test:ui": "npm run test:functional",
+    "test:a11y": "playwright test --project=accessibility",
+    "qa:aggregate": "tsx scripts/aggregate-results.ts",
+    "qa:resolve-preview": "tsx scripts/resolve-preview.ts",
+    "qa:list-open-prs": "tsx scripts/list-open-prs.ts",
+    "qa:prioritize": "tsx scripts/prioritize-pr-tests.ts",
+    "qa:ai": "tsx scripts/ai-analysis.ts",
+    "qa:report": "tsx scripts/report-github.ts",
+    "validate:workflows": "tsx scripts/validate-workflows.ts",
+    "verify:mcp": "node scripts/verify-playwright-mcp.mjs"
+  },
+  "dependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.55.0",
+    "dotenv": "^17.2.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@playwright/mcp": "^0.0.79",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0",
+    "yaml": "^2.9.0"
+  }
+}
