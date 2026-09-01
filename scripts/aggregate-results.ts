@@ -3,11 +3,11 @@ import { mkdir, readFile, writeFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { qaResultSchema, type QaResult } from "../src/result-schema.js";
 
-type PwTest = { title: string; expectedStatus?: string; results?: Array<{ status?: string; error?: { message?: string }; attachments?: Array<{ name: string; path?: string }> }> };
+type PwTest = { title?: string; expectedStatus?: string; results?: Array<{ status?: string; error?: { message?: string }; attachments?: Array<{ name: string; path?: string }> }> };
 type PwSuite = { title: string; specs?: Array<{ title: string; tests: PwTest[] }>; suites?: PwSuite[] };
 type PwReport = { suites?: PwSuite[] };
 
-const sanitize = (input: string, max = 2000) => input
+const sanitize = (input: unknown, max = 2000) => String(input ?? "")
   .replace(/[\u0000-\u001f\u007f]/g, " ")
   .replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]")
   .replace(/(password|token|secret|api[_-]?key)\s*[:=]\s*\S+/gi, "$1=[REDACTED]")
@@ -44,7 +44,7 @@ for (const { path: testPath, test } of reports.flatMap((report) => flatten(repor
   const project = testPath.join(" ").toLowerCase();
   const category = suiteType(project);
   const actual = sanitize(result?.error?.message ?? "The test did not complete successfully.");
-  const title = sanitize(test.title, 240);
+  const title = sanitize(test.title || testPath.at(-1) || "Unnamed Playwright test", 240);
   const route = sanitize((actual.match(/https?:\/\/[^\s]+(\/[^\s]*)/)?.[1] ?? "unspecified"), 200);
   failures.push({
     fingerprint: fingerprint(title, route, actual), suite: category, title, route,
