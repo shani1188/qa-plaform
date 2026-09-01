@@ -8,6 +8,7 @@ type PwSuite = { title: string; specs?: Array<{ title: string; tests: PwTest[] }
 type PwReport = { suites?: PwSuite[] };
 
 const sanitize = (input: unknown, max = 2000) => String(input ?? "")
+  .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
   .replace(/[\u0000-\u001f\u007f]/g, " ")
   .replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]")
   .replace(/(password|token|secret|api[_-]?key)\s*[:=]\s*\S+/gi, "$1=[REDACTED]")
