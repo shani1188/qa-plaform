@@ -106,7 +106,7 @@ jobs:
       - run: npm ci
         working-directory: product
       - if: env.HAS_AUTH == 'true'
-        run: npm run qa:seed
+        run: node --import tsx scripts/seed-qa-users.ts
         working-directory: product
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
@@ -279,7 +279,7 @@ jobs:
         run: npm ci
         working-directory: product
       - if: env.HAS_AUTH == 'true'
-        run: npm run qa:cleanup
+        run: node --import tsx scripts/cleanup-qa-data.ts
         working-directory: product
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
