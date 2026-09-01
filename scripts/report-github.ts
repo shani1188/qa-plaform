@@ -9,8 +9,13 @@ if (!token || !repo) throw new Error("GITHUB_TOKEN and GITHUB_REPOSITORY are req
 const [owner, name] = repo.split("/");
 const api = process.env.GITHUB_API_URL ?? "https://api.github.com";
 const headers = { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "Content-Type": "application/json", "X-GitHub-Api-Version": "2022-11-28" };
+const publicHeaders = { Accept: "application/vnd.github+json", "Content-Type": "application/json", "X-GitHub-Api-Version": "2022-11-28" };
 const request = async (path: string, init: RequestInit = {}) => {
-  const response = await fetch(`${api}${path}`, { ...init, headers: { ...headers, ...(init.headers ?? {}) } });
+  let response = await fetch(`${api}${path}`, { ...init, headers: { ...headers, ...(init.headers ?? {}) } });
+  const method = (init.method ?? "GET").toUpperCase();
+  if (method === "GET" && response.status === 404) {
+    response = await fetch(`${api}${path}`, { ...init, headers: { ...publicHeaders, ...(init.headers ?? {}) } });
+  }
   if (!response.ok) throw new Error(`GitHub request failed: ${init.method ?? "GET"} ${path} (${response.status}).`);
   return response.status === 204 ? null : response.json();
 };

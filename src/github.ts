@@ -25,16 +25,19 @@ export function githubConfig() {
 
 export async function githubRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const config = githubConfig();
-  const response = await fetch(`${config.apiUrl}${path}`, {
+  const request = (authenticated: boolean) => fetch(`${config.apiUrl}${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${config.token}`,
+      ...(authenticated ? { Authorization: `Bearer ${config.token}` } : {}),
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
       ...(init.body ? { "Content-Type": "application/json" } : {}),
       ...(init.headers ?? {})
     }
   });
+  let response = await request(true);
+  const method = (init.method ?? "GET").toUpperCase();
+  if (method === "GET" && response.status === 404) response = await request(false);
   if (!response.ok) {
     const requestId = response.headers.get("x-github-request-id");
     throw new Error(`GitHub API request failed (${response.status})${requestId ? `, request ${requestId}` : ""}.`);

@@ -91,11 +91,13 @@ jobs:
     env:
       HAS_AUTH: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY != '' && secrets.QA_USER_PASSWORD != '' }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ inputs.target_repository || github.repository }}
-          token: ${{ secrets.TARGET_GITHUB_TOKEN || github.token }}
-          path: product
+      - name: Checkout public target repository
+        if: env.HAS_AUTH == 'true'
+        env:
+          TARGET_REPOSITORY: ${{ inputs.target_repository || github.repository }}
+        run: |
+          [[ "$TARGET_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          git clone --depth 1 "https://github.com/${TARGET_REPOSITORY}.git" product
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node_version }}
@@ -260,12 +262,13 @@ jobs:
     env:
       HAS_AUTH: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY != '' && secrets.QA_USER_PASSWORD != '' }}
     steps:
-      - if: env.HAS_AUTH == 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ inputs.target_repository || github.repository }}
-          token: ${{ secrets.TARGET_GITHUB_TOKEN || github.token }}
-          path: product
+      - name: Checkout public target repository
+        if: env.HAS_AUTH == 'true'
+        env:
+          TARGET_REPOSITORY: ${{ inputs.target_repository || github.repository }}
+        run: |
+          [[ "$TARGET_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          git clone --depth 1 "https://github.com/${TARGET_REPOSITORY}.git" product
       - if: env.HAS_AUTH == 'true'
         uses: actions/setup-node@v4
         with:

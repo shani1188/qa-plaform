@@ -33,6 +33,17 @@ describe("GitHub environment configuration", () => {
     await expect(listOpenPullRequests()).resolves.toEqual([{ number: 7, title: "Open", headSha: "abc", htmlUrl: "https://example.test/pr/7", draft: false }]);
   });
 
+  it("retries public GET requests without authorization after a scoped-token 404", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response("not found", { status: 404 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ number: 7, title: "Open", state: "open", html_url: "https://example.test/pr/7", head: { sha: "abc" } }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getOpenPullRequest(7)).resolves.toMatchObject({ number: 7 });
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get("Authorization")).toBe("Bearer test-token");
+    expect(new Headers(fetchMock.mock.calls[1][1].headers).has("Authorization")).toBe(false);
+  });
+
   it("rejects a pull request that is no longer open", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ number: 9, title: "Closed", state: "closed", html_url: "https://example.test/pr/9", head: { sha: "abc" } }), { status: 200, headers: { "Content-Type": "application/json" } })));
     await expect(getOpenPullRequest(9)).rejects.toThrow(/only open pull requests/);
